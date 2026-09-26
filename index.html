@@ -96,4 +96,39 @@ const quiz=[
 ['Which test checks several collaborating components?',['Unit test','Integration test','Spelling test','Snapshot backup'],1,'Integration tests verify boundaries and behavior across components such as an API and database.'],
 ['Strongest evidence of technical understanding?',['Many watched videos','A working, tested project you can explain','A long tool list','Copied code'],1,'Building, testing and explaining expose gaps that passive consumption can hide.']
 ];let qi=0,points=0,answered=false;const ans=document.getElementById('answers'),next=document.getElementById('next');function render(){answered=false;let x=quiz[qi];document.getElementById('qCount').textContent=`QUESTION ${qi+1} OF ${quiz.length}`;document.getElementById('question').textContent=x[0];document.getElementById('feedback').textContent='';document.getElementById('score').textContent=`SCORE ${points} / ${qi}`;ans.innerHTML='';x[1].forEach((t,i)=>{let b=document.createElement('button');b.className='answer';b.textContent=t;b.onclick=()=>pick(i,b);ans.appendChild(b)});next.style.display='none'}function pick(i,b){if(answered)return;answered=true;let x=quiz[qi];[...ans.children].forEach((e,j)=>{e.disabled=true;if(j===x[2])e.classList.add('good')});if(i===x[2])points++;else b.classList.add('bad');document.getElementById('feedback').textContent=(i===x[2]?'Correct. ':'Not quite. ')+x[3];document.getElementById('score').textContent=`SCORE ${points} / ${qi+1}`;next.textContent=qi===quiz.length-1?'Restart test ↻':'Next question →';next.style.display='inline-flex'}next.onclick=()=>{if(qi===quiz.length-1){qi=0;points=0}else qi++;render()};render();
-</script></body></html>
+</script>
+<section class="eph-comments" id="comments" aria-label="Comments and suggestions">
+  <h2>Comments &amp; suggestions</h2>
+  <p class="eph-comments-note">Spotted a mistake, an outdated date, or a missing topic? Leave a comment below &mdash; it helps improve this page for everyone.</p>
+  <div id="eph-giscus-wrap"><p class="eph-comments-note">Loading comments&hellip;</p></div>
+</section>
+<script>
+(function(){
+  var loaded=false;
+  function load(){
+    if(loaded) return; loaded=true;
+    var s=document.createElement('script');
+    s.src='https://giscus.app/client.js';
+    s.async=true; s.crossOrigin='anonymous';
+    s.setAttribute('data-repo','maticcretic-commits/software-ai-tech-prep');
+    s.setAttribute('data-repo-id','R_kgDOUr0q3A');
+    s.setAttribute('data-category','Ideas');
+    s.setAttribute('data-category-id','DIC_kwDOUr0q3M4DGanD');
+    s.setAttribute('data-mapping','pathname');
+    s.setAttribute('data-strict','0');
+    s.setAttribute('data-reactions-enabled','1');
+    s.setAttribute('data-emit-metadata','0');
+    s.setAttribute('data-input-position','top');
+    s.setAttribute('data-theme','preferred_color_scheme');
+    s.setAttribute('data-lang','en');
+    var w=document.getElementById('eph-giscus-wrap');
+    w.innerHTML='';
+    w.appendChild(s);
+  }
+  var w=document.getElementById('eph-giscus-wrap');
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(function(es,o){ if(es[0].isIntersecting){ load(); o.disconnect(); } },{rootMargin:'500px'}).observe(w);
+  } else { load(); }
+})();
+</script>
+</body></html>
