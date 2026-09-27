@@ -376,6 +376,17 @@ def consumer():
 <p><strong>Cookies</strong> store state client-side (sent with every request); <strong>sessions</strong> store state server-side with a cookie holding only a session ID. <strong>WebSocket</strong> upgrades HTTP to a full-duplex persistent connection — chat, live dashboards. <strong>CORS</strong>: browsers block cross-origin fetches unless the server sends <code>Access-Control-Allow-Origin</code>; <strong>preflight</strong> OPTIONS requests precede non-simple requests. Polling vs long-polling vs SSE vs WebSocket — match the pattern to the use case.</p>
 <h4>8.8 Common traps</h4>
 <p>"Bandwidth" vs "latency" — throughput vs delay; a truck of hard drives has huge bandwidth, terrible latency. localhost <code>127.0.0.1</code> never leaves the machine. <code>ping</code> uses ICMP, not TCP. TCP's 3-way handshake can't be skipped but <em>TLS 1.3</em> can do 1-RTT and even 0-RTT resumption. GET vs POST: both can carry data; GET is idempotent and cacheable, POST isn't — never put sensitive data in a URL.</p>
+<h4>8.9 Subnetting by hand — the exam drill</h4>
+<p>Subnetting questions are free marks if you can do the binary arithmetic quickly. The recipe: given an address and a prefix length /n, the first n bits are the network portion and the remaining 32−n bits are host bits. Number of subnets carved from a parent block = 2<sup>borrowed bits</sup>; usable hosts per subnet = 2<sup>host bits</sup> − 2 (network and broadcast addresses are reserved).</p>
+<p><em>Worked example.</em> Split 192.168.10.0/24 into /26 subnets. Borrowed bits = 26 − 24 = 2, so 2<sup>2</sup> = 4 subnets; host bits = 32 − 26 = 6, so 2<sup>6</sup> − 2 = 62 usable hosts each. The block size in the last octet is 256 − 192 = 64, so the subnets are 192.168.10.0/26 (hosts .1–.62, broadcast .63), 192.168.10.64/26 (.65–.126, broadcast .127), 192.168.10.128/26, and 192.168.10.192/26. Verify one: for host 192.168.10.100 with mask 255.255.255.192, the network address is 100 AND 192 = 64 in the last octet → 192.168.10.64. Correct.</p>
+<p><em>VLSM example.</em> You need subnets for 60, 25 and 10 hosts from 10.0.0.0/24. Always allocate the largest requirement first: 60 hosts needs 6 host bits (2<sup>6</sup> − 2 = 62 ≥ 60) → /26: 10.0.0.0/26 (broadcast 10.0.0.63). Next, 25 hosts needs 5 host bits (30 ≥ 25) → /27: 10.0.0.64/27 (broadcast 10.0.0.95). Finally 10 hosts needs 4 host bits (14 ≥ 10) → /28: 10.0.0.96/28 (broadcast 10.0.0.111). Allocating largest-first avoids fragmenting the space into unusable slivers — the single most common VLSM trap is allocating a small subnet first and stranding addresses.</p>
+<p><em>Supernetting.</em> The reverse operation: 192.168.0.0/24 + 192.168.1.0/24 + 192.168.2.0/24 + 192.168.3.0/24 aggregate to 192.168.0.0/22, because the first 22 bits are common. Routers use this route summarization to keep backbone tables small. CIDR notation has no class boundaries — forget Class A/B/C except as history.</p>
+<h4>8.10 TCP internals: sequence numbers and the congestion sawtooth</h4>
+<p>Walk a real transfer. Client sends SYN with ISN<sub>c</sub> = 1000. Server replies SYN-ACK with ISN<sub>s</sub> = 5000 and ACK = 1001 ("I expect byte 1001 next"). Client ACKs with seq = 1001, ack = 5001. Now the client sends 1460 bytes: seq = 1001, and the server replies ack = 2461. Every ACK number is the <em>next expected byte</em>, which is how TCP detects gaps: if segments 2461–3920 arrive but 1001–2460 are missing, the receiver keeps ACKing 1001 — these <strong>duplicate ACKs</strong> are the loss signal.</p>
+<p><strong>Fast retransmit:</strong> after 3 duplicate ACKs the sender resends the missing segment immediately instead of waiting for the retransmission timeout (RTO). The RTO itself is adaptive: RTO ≈ SRTT + 4 × RTTVAR (smoothed RTT plus four times the variation), clamped to a minimum (commonly 1 second historically, 200 ms–1 s in modern stacks). This is why a single loss costs roughly one RTT with fast retransmit but seconds with a timeout.</p>
+<p><strong>The congestion sawtooth:</strong> in congestion avoidance, cwnd grows by ~1 MSS per RTT (additive increase) and halves on loss (multiplicative decrease). With a 100 ms RTT and 1460-byte MSS, the window climbs by about 14.6 KB/s per RTT — from 64 KB to 128 KB takes ~4.4 seconds of clean RTTs, then one loss halves it and the climb restarts. This sawtooth is TCP's fairness mechanism: flows sharing a bottleneck converge to roughly equal shares. <strong>Slow start</strong> is different — it doubles cwnd every RTT (exponential) until ssthresh or loss, and it also runs after an RTO timeout. Remember the contrast examiners love: slow start is exponential probing; congestion avoidance is linear AIMD.</p>
+<p><strong>Flow control vs congestion control</strong> in one line: the receiver's advertised window (rwnd) protects the <em>receiver's</em> buffers; the congestion window (cwnd) protects the <em>network</em>; the sender uses min(rwnd, cwnd). Silly window syndrome and Nagle's algorithm are the classic small-packet pathologies built on top of this machinery.</p>
+
 </div></article>
 <article class="chapter" id="ch-9"><button><span>CH 9</span><strong>9. Python Programming</strong><i>+</i></button><div class="chapter-body">
 <h4>9.1 Why Python dominates interviews</h4>
@@ -430,6 +441,33 @@ def fib():
 <p>Two pointers, sliding window, prefix sums (<code>itertools.accumulate</code>), hashmap frequency counting, BFS with <code>deque</code>, DFS recursion (watch the ~1000 default recursion limit — <code>sys.setrecursionlimit</code> for deep trees), binary search with <code>bisect</code>. For recursion-heavy problems, state the limit risk explicitly — it signals maturity.</p>
 <h4>9.8 Modules, virtualenvs, and the ecosystem</h4>
 <p><code>pip install</code> + <strong>virtual environments</strong> (<code>python -m venv</code>) isolate dependencies — every interview project question expects this. <code>requirements.txt</code> or <code>pyproject.toml</code> pins versions. Know the standard library's greatest hits: <code>os/sys</code>, <code>re</code> (regex), <code>json</code>, <code>datetime</code>, <code>itertools</code>, <code>functools</code>, <code>collections</code>, <code>pathlib</code> (prefer over string paths), <code>unittest/pytest</code> for testing.</p>
+<h4>9.9 Concurrency: threads, processes, and asyncio</h4>
+<p>Python offers three concurrency models, and interviews test whether you can pick the right one. <strong>Threading</strong> (<code>threading.Thread</code>) runs multiple threads in one process, sharing memory — but the GIL means only one thread executes bytecode at a time, so threads help I/O-bound work (web scraping, API calls, file reads) where threads mostly wait, not CPU-bound number crunching. Threads share state, so guard shared data with <code>threading.Lock</code>; a missed lock is a race-condition bug waiting for production.</p>
+<p><strong>Multiprocessing</strong> (<code>multiprocessing.Pool</code>) spawns separate processes, each with its own GIL and memory — true parallelism for CPU-bound tasks like image processing or heavy computation. The price is inter-process communication overhead: data crosses process boundaries via pickling through queues or pipes, so keep chunk sizes large. A rule of thumb examiners accept: threads for I/O-bound, processes for CPU-bound.</p>
+<p><strong>Asyncio</strong> is cooperative single-threaded concurrency: coroutines (<code>async def</code>) voluntarily yield at <code>await</code> points, so one thread juggles thousands of connections with almost no overhead. It shines for high-concurrency network servers and crawlers. The catch: any blocking call (a plain <code>requests.get</code> or <code>time.sleep</code>) inside a coroutine freezes the entire event loop — use <code>aiohttp</code> and <code>asyncio.sleep</code> instead, or offload with <code>loop.run_in_executor</code>.</p>
+<pre>
+<code># asyncio: 100 web requests concurrently on one thread
+import asyncio, aiohttp
+
+async def fetch(session, url):
+    async with session.get(url) as r:
+        return await r.text()
+
+async def main(urls):
+    async with aiohttp.ClientSession() as s:
+        return await asyncio.gather(*(fetch(s, u) for u in urls))
+
+# concurrent.futures: simplest thread/process pools
+from concurrent.futures import ThreadPoolExecutor
+with ThreadPoolExecutor(max_workers=8) as ex:
+    results = list(ex.map(download, urls))</code>
+</pre>
+<p>Know the vocabulary cold: <em>concurrency</em> (dealing with many things at once) vs <em>parallelism</em> (doing many things at once), deadlock vs livelock, and why <code>asyncio.gather</code> fails fast while <code>wait</code> gives control. Mentioning that <code>concurrent.futures</code> unifies the thread/process API is an easy maturity signal.</p>
+<h4>9.10 Profiling and debugging like a professional</h4>
+<p>Never optimize on gut feeling — measure first. <code>python -m cProfile -s cumulative script.py</code> shows where time actually goes; <code>timeit</code> micro-benchmarks snippets (<code>python -m timeit "''.join(xs)"</code> vs string concatenation in a loop — the classic demo that join wins by avoiding O(n²) copying). For memory, <code>tracemalloc</code> snapshots allocations and pinpoints the lines growing your footprint; a list that should have been a generator is the most common find.</p>
+<p>When a program misbehaves, reach for <code>pdb</code> before print-debugging: <code>breakpoint()</code> drops you into an interactive shell at that line, where <code>n</code> steps, <code>s</code> steps in, <code>c</code> continues, and <code>p variable</code> inspects state. For post-mortems, <code>python -m pdb script.py</code> or <code>pdb.pm()</code> after a crash lands you exactly at the failing frame. In interviews, narrating "I'd breakpoint here and check the invariant" beats staring silently.</p>
+<p>Replace <code>print</code> debugging with the <code>logging</code> module in anything beyond a script: levels (DEBUG/INFO/WARNING/ERROR), timestamps, and the ability to silence or redirect output without editing code. <code>logging.basicConfig(level=logging.INFO)</code> is one line. Finally, write the regression test <em>before</em> the fix — <code>pytest</code> makes this painless, and "I added a test that reproduces it" is the sentence interviewers want to hear after any bug story.</p>
+
 </div></article>
 <article class="chapter" id="ch-10"><button><span>CH 10</span><strong>10. AI/ML Fundamentals</strong><i>+</i></button><div class="chapter-body">
 <h4>10.1 The landscape</h4>
@@ -529,9 +567,9 @@ const {name, ...rest} = {name:"A", age:21, city:"Patna"};</code></pre>
 
 <section class="practice" id="practice-bank">
 <div class="wrap practice-shell">
-<div class="kicker">NEW / 400-QUESTION PRACTICE BANK</div>
+<div class="kicker">NEW / 575-QUESTION PRACTICE BANK</div>
 <h2>Practice question bank</h2>
-<p>400 solved MCQs across 9 topics, each with an explanation. Pick a topic (or All) and take a 15-question test drawn at random &mdash; every attempt is a fresh shuffle.</p>
+<p>575 solved MCQs across 9 topics, each with an explanation. Pick a topic (or All) and take a 15-question test drawn at random &mdash; every attempt is a fresh shuffle.</p>
 <div class="topic-chips" id="bank-chips"></div>
 <div class="qtopic" id="bqtopic"></div>
 <div class="qcount" id="bqCount"></div>
@@ -665,16 +703,32 @@ const {name, ...rest} = {name:"A", age:21, city:"Patna"};</code></pre>
       <p>Project-first deep learning for coders — learn by building, math second.</p>
     </div>
 
+    <div class="resource-card">
+      <h3>
+<a href="https://www.youtube.com/@statquest" target="_blank" rel="noopener">StatQuest (YouTube)</a>
+</h3>
+      <span class="badge free">FREE</span>
+      <p>Josh Starmer's visual, song-filled explainers for random forests, gradient boosting and every core ML algorithm.</p>
+    </div>
+
+    <div class="resource-card">
+      <h3>
+<a href="https://www.coursera.org/specializations/machine-learning-introduction" target="_blank" rel="noopener">Machine Learning Specialization — Andrew Ng</a>
+</h3>
+      <span class="badge freemium">FREEMIUM</span>
+      <p>Andrew Ng's flagship ML course on Coursera — audit the lectures free, pay only for graded certificates.</p>
+    </div>
+
 </div>
 </div>
 </section>
 <section id="plan"><div class="wrap"><div class="section-head"><div><div class="rule"></div><div class="kicker">06 / EXECUTION SYSTEM</div><h2>A week that compounds</h2></div><p>For each hour of reading, spend an hour writing, debugging or explaining. Small releases build stronger evidence than a large unfinished course list.</p></div><div class="plan-grid"><div class="week"><div class="day"><strong>MON–TUE</strong><p>Read one chapter, recreate its example, then explain it from memory.</p></div><div class="day"><strong>WED–THU</strong><p>Apply the concept in your project and add one edge-case test.</p></div><div class="day"><strong>FRIDAY</strong><p>Refactor naming, structure, errors, security and documentation.</p></div><div class="day"><strong>SATURDAY</strong><p>Ship a small version and ask someone to run it from the README.</p></div><div class="day"><strong>SUNDAY</strong><p>Review failures, retry missed questions and set one measurable goal.</p></div></div><div><div class="principle"><b>01</b><div><h3>One language first</h3><p>Choose Python for automation/data/AI or JavaScript for web. Depth before variety.</p></div></div><div class="principle"><b>02</b><div><h3>Retrieve, do not hoard</h3><p>Know concepts; use documentation for exact syntax and changing APIs.</p></div></div><div class="principle"><b>03</b><div><h3>AI is not proof</h3><p>Run code, inspect dependencies, test boundaries and understand what you accept.</p></div></div><div class="principle"><b>04</b><div><h3>Security needs permission</h3><p>Practise only on systems you own or are explicitly authorized to assess.</p></div></div></div></div></div></section>
 <section class="resources" id="one-liners">
 <div class="wrap">
-<div class="kicker">NEW / 250 RAPID-FIRE ONE-LINERS</div>
+<div class="kicker">NEW / 350 RAPID-FIRE ONE-LINERS</div>
 <h2>One-liner revision bank</h2>
-<p>250 bite-sized facts for last-mile revision &mdash; search filters the list as you type.</p>
-<div class="study-tools"><input class="search" id="ol-search" type="search" placeholder="Search 250 one-liners&hellip;" aria-label="Search one-liners"><span class="chap-count" id="ol-count"></span></div>
+<p>350 bite-sized facts for last-mile revision &mdash; search filters the list as you type.</p>
+<div class="study-tools"><input class="search" id="ol-search" type="search" placeholder="Search 350 one-liners&hellip;" aria-label="Search one-liners"><span class="chap-count" id="ol-count"></span></div>
 <div id="ol-list"></div>
 <div id="ol-empty" class="hide"><p>No matching one-liner. Try a broader term.</p></div>
 </div>
@@ -1007,6 +1061,47 @@ const {name, ...rest} = {name:"A", age:21, city:"Patna"};</code></pre>
       </div>
     </article>
 
+    <article class="satp-iv-card" data-topic="AI/ML">
+      <div class="satp-iv-player" data-kind="video" data-id="eMlx5fFNoYc" role="button" tabindex="0" aria-label="Play video: Attention in transformers, step-by-step">
+        <img src="https://i.ytimg.com/vi/eMlx5fFNoYc/hqdefault.jpg" alt="Attention in transformers thumbnail" loading="lazy">
+        <div class="satp-iv-playbtn">
+<span>
+<svg viewBox="0 0 24 24">
+<path d="M8 5v14l11-7z"/>
+</svg>
+</span>
+</div>
+      </div>
+      <div class="satp-iv-body">
+        <h3 class="satp-iv-title">Attention in transformers, step-by-step</h3>
+        <p class="satp-iv-channel">3Blue1Brown</p>
+        <div class="satp-iv-tags">
+<span class="satp-iv-tag">AI/ML</span>
+<span class="satp-iv-kind">Video</span>
+</div>
+      </div>
+    </article>
+
+    <article class="satp-iv-card" data-topic="AI/ML">
+      <div class="satp-iv-player" data-kind="video" data-id="J4Wdy0Wc_xQ" role="button" tabindex="0" aria-label="Play video: Random Forests Part 1 - Building, Using and Evaluating">
+        <img src="https://i.ytimg.com/vi/J4Wdy0Wc_xQ/hqdefault.jpg" alt="Random Forests Part 1 thumbnail" loading="lazy">
+        <div class="satp-iv-playbtn">
+<span>
+<svg viewBox="0 0 24 24">
+<path d="M8 5v14l11-7z"/>
+</svg>
+</span>
+</div>
+      </div>
+      <div class="satp-iv-body">
+        <h3 class="satp-iv-title">Random Forests Part 1 - Building, Using and Evaluating</h3>
+        <p class="satp-iv-channel">StatQuest with Josh Starmer</p>
+        <div class="satp-iv-tags">
+<span class="satp-iv-tag">AI/ML</span>
+<span class="satp-iv-kind">Video</span>
+</div>
+      </div>
+    </article>
   </div>
   <script>
   (function () {
@@ -1057,6 +1152,236 @@ const {name, ...rest} = {name:"A", age:21, city:"Patna"};</code></pre>
   })();
   </script>
 </section>
+<section id="tech-capsules" class="satp-caps-section" aria-labelledby="satp-caps-heading">
+  <style>
+    .satp-caps-section { padding: 2.5rem 1rem; max-width: 1200px; margin: 0 auto; }
+    .satp-caps-section h2 { font-size: 1.8rem; margin: 0 0 .25rem; }
+    .satp-caps-sub { color: #666; margin: 0 0 1.25rem; }
+    .satp-caps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .satp-caps-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 1rem 1.1rem; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .satp-caps-date { font-size: .72rem; font-weight: 700; color: #1a56c4; letter-spacing: .04em; text-transform: uppercase; }
+    .satp-caps-card h3 { font-size: .95rem; margin: .35rem 0 .4rem; line-height: 1.35; }
+    .satp-caps-card p { font-size: .85rem; color: #444; margin: 0 0 .6rem; line-height: 1.5; }
+    .satp-caps-tag { font-size: .72rem; padding: .18rem .6rem; border-radius: 999px; background: #eef4ff; color: #1a56c4; }
+  </style>
+  <div class="kicker">NEW / TECH &amp; AI CURRENT AFFAIRS</div>
+  <h2 id="satp-caps-heading">September 2026 in tech &amp; AI</h2>
+  <p class="satp-caps-sub">30 dated capsules — model releases, research, developer tools and industry moves from September 2026. Interviewers love asking "what's new in AI?" — these are your answers.</p>
+  <div class="satp-caps-grid">
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>OpenAI launches GPT-6 Astra, its new frontier model</h3>
+      <p>OpenAI's GPT-6 Astra arrived as the start of a new generation, aimed at complex reasoning, coding and computer use — and reportedly the first model to trigger the company's critical-cyber safeguard threshold. API pricing is listed at $10 per million input tokens and $50 per million output tokens.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 22, 2026</div>
+      <h3>GPT-6 Sol and Luna: frontier smarts at half the price</h3>
+      <p>OpenAI followed Astra with two cheaper siblings — Sol for coding and agentic work ($2/$10 per million input/output tokens) and Luna for high-volume summarisation and extraction ($0.10/$0.50) — priced about 50% below their GPT-5.6 counterparts thanks to better caching and inference.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 1, 2026</div>
+      <h3>Anthropic debuts Claude Fable 5.1 and Mythos 5.1</h3>
+      <p>Anthropic opened the month with Fable 5.1 and its trusted-access counterpart Mythos 5.1, positioned for creative and narrative generation with more nuanced, human-like writing.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>Claude Opus 5.5 cuts prices and gets faster</h3>
+      <p>Anthropic's Opus 5.5 dropped to $4 input / $20 output per million tokens (from $5/$25), with cache reads down to $0.20 and output speed up over 30%. Sonnet 5.5 and Haiku 5.5 were slated to follow within weeks.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2, 2026</div>
+      <h3>Google DeepMind ships Gemini 3.8 Flash — plus a cyber-defence variant</h3>
+      <p>Gemini 3.8 Flash targets real-time conversational AI and multitasking agents, alongside a defenders-only Gemini 3.8 Flash Cyber variant aimed at cybersecurity use cases.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2, 2026</div>
+      <h3>Meta quietly releases Muse Spark 1.3</h3>
+      <p>Meta's Muse Spark 1.3 landed with little fanfare early in the month, continuing the quiet cadence of its assistant-model releases.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 22, 2026</div>
+      <h3>xAI's Grok 4.7: same price under 200k tokens, pricier beyond</h3>
+      <p>Grok 4.7 kept $2 input / $6 output per million tokens for prompts under 200k tokens but added a $4/$12 tier above 200k, with the 500k context window unchanged — long-context agent work got more expensive at the far end.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>DeepSeek V4.1-Flash slashes memory needs</h3>
+      <p>DeepSeek's V4.1-Flash releases drew attention for cutting memory requirements by up to 4x through architectural efficiency rather than raw scale.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 15, 2026</div>
+      <h3>TypeSafe AI's Jev: a model that outputs decisions, not tokens</h3>
+      <p>Jev is a "System One" model that answers typed questions about a situation with probabilities in parallel, instead of generating text token-by-token — built for the small judgements software makes all day: routing, scoring, classifying.</p>
+      <span class="satp-caps-tag">AI Research</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>Swiss Apertus 1.5 reaches general availability</h3>
+      <p>The fully open, transparent multilingual Apertus 1.5 model went GA with a 262k-token context window, native image understanding and an optional reasoning "thinking mode" — a milestone for open-weight AI from the Swiss AI Initiative.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>Moonshot AI previews Kimi K2.8</h3>
+      <p>Moonshot's Kimi K2.8 Preview joined September's crowded release calendar, continuing the Kimi line's push on long-context and agentic capabilities.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>Sakana AI releases Fugu Ultra v2.0 and Fugu Max</h3>
+      <p>Sakana AI shipped Fugu Ultra v2.0 alongside Fugu Max, adding to the month's wave of new-generation model launches.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>OpenAI's GPT Image 2.5 Flare and Sunburst</h3>
+      <p>Two new GPT Image 2.5 variants — Flare and Sunburst — extended OpenAI's image-generation lineup during the September release rush.</p>
+      <span class="satp-caps-tag">AI Models</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 22, 2026</div>
+      <h3>Xiaomi's MiMo 2.6 ships its reinforcement-learning stack</h3>
+      <p>Xiaomi's MiMo 2.6 release included its RL training stack, a notable open move in a month dominated by closed launches.</p>
+      <span class="satp-caps-tag">AI Research</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2, 2026</div>
+      <h3>PyTorch 2.14.0 released</h3>
+      <p>The PyTorch team cut version 2.14.0, continuing the framework's steady release train that most ML engineering work still runs on.</p>
+      <span class="satp-caps-tag">Dev Tools</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 16, 2026</div>
+      <h3>Node.js 26.9.0 (Current) lands with a generic MAC API</h3>
+      <p>Node 26.9.0's notable change was a new generic message-authentication-code API in the crypto module — a semver-minor addition for developers doing HMAC-style integrity checks.</p>
+      <span class="satp-caps-tag">Dev Tools</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Rust 1.98.1 fixes a vtable miscompilation</h3>
+      <p>A quick patch release, Rust 1.98.1 addressed a miscompilation bug in vtable generation — the kind of compiler fix that matters enormously to systems programmers.</p>
+      <span class="satp-caps-tag">Dev Tools</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Docker Compose v5.5.1 released</h3>
+      <p>Docker Compose 5.5.1 shipped with improvements including lifecycle-hook output capture and better OpenTelemetry shutdown error surfacing.</p>
+      <span class="satp-caps-tag">Dev Tools</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 20, 2026</div>
+      <h3>Svelte 5.57 arrives with a SvelteKit 3 release candidate</h3>
+      <p>The Svelte team released 5.57 alongside a SvelteKit 3 release candidate — worth tracking if frontend work comes up in full-stack interviews.</p>
+      <span class="satp-caps-tag">Dev Tools</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Tesla unveils the steering-wheel-free Cybercab</h3>
+      <p>Tesla formally revealed a pedal-free, steering-wheel-free Cybercab in Austin and opened sign-ups for businesses to buy and run their own fleets — a break from Waymo's company-owned model.</p>
+      <span class="satp-caps-tag">Industry</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>US Justice Department backs AI fair-use defence</h3>
+      <p>The DOJ filed a statement of interest supporting OpenAI and Microsoft's fair-use defence in The New York Times' copyright lawsuit — the federal government's first staked position in this wave of AI litigation.</p>
+      <span class="satp-caps-tag">Policy</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Thinking Machines nears a $40B valuation raise</h3>
+      <p>Mira Murati's Thinking Machines was reported to be closing a raise at around a $40 billion valuation — one of the largest private AI valuations on record.</p>
+      <span class="satp-caps-tag">Industry</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Google puts conversational voice AI in Gmail, Docs and Keep</h3>
+      <p>Google rolled out conversational voice AI features across Gmail, Docs and Keep, pushing voice interaction into everyday productivity apps.</p>
+      <span class="satp-caps-tag">Industry</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Thomson Reuters breach exposes court records</h3>
+      <p>A breach at Thomson Reuters exposed US and Canadian court records across 11 US states and Ontario — a reminder that legal-tech data is a high-value target.</p>
+      <span class="satp-caps-tag">Security</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>WhatsApp Android lock-screen bypass surfaces</h3>
+      <p>Security researchers flagged a WhatsApp flaw on Android that could bypass the lock screen — patch promptly and keep interview answers on mobile security current.</p>
+      <span class="satp-caps-tag">Security</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 3, 2026</div>
+      <h3>Smart-ring maker Oura files for IPO</h3>
+      <p>Oura filed to go public, testing investor appetite for consumer health hardware after years of private-market growth.</p>
+      <span class="satp-caps-tag">Industry</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 24, 2026</div>
+      <h3>India tech funding hits $10.3B in 9M 2026, says Tracxn</h3>
+      <p>Indian tech firms raised $10.3 billion in the first nine months of 2026, up 7% year-on-year even as deal count fell 38% — capital concentrating into fewer, bigger bets. Six new unicorns emerged, led by Nxtra's $1B round, Neysa's $600M Series B and CRED's $540M Series H.</p>
+      <span class="satp-caps-tag">Industry</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>Bay Area tech layoffs top 1,100 in September</h3>
+      <p>Tech firms disclosed 1,196 permanent Bay Area job cuts in September — Oracle (441), Uber (390), PayPal (251) and Intel (52) — bringing 2026's disclosed total to roughly 13,900, about 37% above all of 2025.</p>
+      <span class="satp-caps-tag">Industry</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 20, 2026</div>
+      <h3>Antitrust suit targets AI labs over "pacing" coordination</h3>
+      <p>Four subscribers filed a federal antitrust class action against Anthropic, OpenAI, Google and SpaceXAI, arguing the labs' synchronized endorsements of industry-wide AI "pacing" amounted to unlawful coordination.</p>
+      <span class="satp-caps-tag">Policy</span>
+    </article>
+
+    <article class="satp-caps-card">
+      <div class="satp-caps-date">Sep 2026</div>
+      <h3>AI regulation splits: California "kill switch" vs a federal "AI Force"</h3>
+      <p>California's governor signed an AI "kill switch" executive order while the US president announced plans for a Space-Force-modeled "AI Force" and an AI czar — the starkest US policy split on AI safety yet.</p>
+      <span class="satp-caps-tag">Policy</span>
+    </article>
+
+  </div>
+</section>
+
 <footer><div class="wrap"><p>Technology changes quickly; fundamentals, careful testing and clear communication age slowly. Work through one track, build the linked project, and use the test explanations to revisit weak areas.</p></div></footer>
 <script>
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===b.dataset.panel))}));
@@ -1079,7 +1404,7 @@ const quiz=[
 ];let qi=0,points=0,answered=false;const ans=document.getElementById('answers'),next=document.getElementById('next');function render(){answered=false;let x=quiz[qi];document.getElementById('qCount').textContent=`QUESTION ${qi+1} OF ${quiz.length}`;document.getElementById('question').textContent=x[0];document.getElementById('feedback').textContent='';document.getElementById('score').textContent=`SCORE ${points} / ${qi}`;ans.innerHTML='';x[1].forEach((t,i)=>{let b=document.createElement('button');b.className='answer';b.textContent=t;b.onclick=()=>pick(i,b);ans.appendChild(b)});next.style.display='none'}function pick(i,b){if(answered)return;answered=true;let x=quiz[qi];[...ans.children].forEach((e,j)=>{e.disabled=true;if(j===x[2])e.classList.add('good')});if(i===x[2])points++;else b.classList.add('bad');document.getElementById('feedback').textContent=(i===x[2]?'Correct. ':'Not quite. ')+x[3];document.getElementById('score').textContent=`SCORE ${points} / ${qi+1}`;next.textContent=qi===quiz.length-1?'Restart test ↻':'Next question →';next.style.display='inline-flex'}next.onclick=()=>{if(qi===quiz.length-1){qi=0;points=0}else qi++;render()};render();
 </script>
 <script>
-/* ===== v2 expansion: chapter search, 400-question practice bank, one-liner search ===== */
+/* ===== v2 expansion: chapter search, 575-question practice bank, one-liner search ===== */
 (function(){
   var cInp=document.getElementById('chapter-search');
   if(cInp){
